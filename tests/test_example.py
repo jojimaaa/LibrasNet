@@ -1,4 +1,4 @@
-def example_test(capsys):
+def test_example(capsys):
     print("Hello from librasnet!")
     captured = capsys.readouterr()
     assert "Hello from librasnet!" in captured.out
