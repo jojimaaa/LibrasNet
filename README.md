@@ -27,10 +27,38 @@ git clone https://github.com/jojimaaa/LibrasNet.git
 
 ### Install dependencies
 ```bash
+# Core: enough to run the test suite on any machine (no camera required)
 uv sync
+
+# Target device / dev machine with a webcam: adds OpenCV and MediaPipe
+uv sync --extra hardware
 ```
 
 ### Run project
 ```bash
 uv run python3 -m main
 ```
+
+### Run the requirements test suite
+Each requirement of `docs/documentacao.md` maps to a test module; the suite
+runs without a camera, OpenCV or MediaPipe (RNF-07).
+
+```bash
+uv run pytest
+```
+
+### Collect gesture samples (RF-06)
+The k-NN classifier has no offline training step: the dataset **is** the
+model. Requires the `hardware` extra and a webcam.
+
+```bash
+# One-time, only for mediapipe >= 0.10.31 (~7.8 MB, then fully offline)
+uv run python3 -m libras.get_model
+
+uv run python3 -m libras.collect --camera 0 --burst 20
+```
+
+In the video window: hold the gesture and press the matching letter key
+(A–Z) to record a burst of samples; `ESC` exits. Aim for at least ~20
+samples per letter, varying the hand angle and distance slightly. Samples
+are appended to `data/dataset.csv`.
