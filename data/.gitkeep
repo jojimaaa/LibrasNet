@@ -1,0 +1,4 @@
+# Esta pasta guarda os artefatos de dados do projeto:
+#   dataset.csv           — amostras coletadas (python -m libras.collect)
+#   hand_landmarker.task  — modelo do MediaPipe, não versionado
+#                           (python -m libras.get_model)

@@ -23,6 +23,7 @@ from collections import Counter
 from pathlib import Path
 
 from .capture import CameraSource
+from .classifier import KnnClassifier
 from .config import DEFAULT_DATASET, Config
 from .dataset import append_samples, load_dataset
 from .features import normalize_landmarks
@@ -111,7 +112,7 @@ class CollectSession:
         return True
 
 
-def draw_overlay(cv2, frame, session, detection) -> None:
+def draw_overlay(cv2, frame, session, detection, prediction=None) -> None:
     """Desenha o esqueleto da mão e o estado da coleta sobre o quadro."""
     if detection is not None:
         h, w = frame.shape[:2]
@@ -125,6 +126,12 @@ def draw_overlay(cv2, frame, session, detection) -> None:
     cv2.putText(frame,
                 f"amostras: {session.total} | letras: {session.letters}",
                 (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    if prediction is not None:
+        cv2.putText(frame,
+                    f"modelo: {prediction.label} "
+                    f"({prediction.confidence:.2f})",
+                    (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                    (0, 255, 255), 2)
 
 
 def main(argv=None) -> int:
@@ -140,12 +147,23 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     config = Config(camera_index=args.camera)
-    session = CollectSession(
-        args.dataset, burst=args.burst,
-        on_burst_end=lambda label: print(f"Rajada de {label} concluída."))
+    classifier: "KnnClassifier | None" = None
+
+    def burst_finished(label: str) -> None:
+        # Retreina com as amostras novas: como o dataset É o modelo, recarregar
+        # basta — e a predição ao vivo passa a refletir a rajada que acabou.
+        nonlocal classifier
+        classifier = KnnClassifier.load(session.dataset_path, k=config.knn_k)
+        print(f"Rajada de {label} concluída; modelo recarregado.")
+
+    session = CollectSession(args.dataset, burst=args.burst,
+                             on_burst_end=burst_finished)
     if session.total:
         print(f"Dataset existente: {session.total} amostras, "
               f"{session.letters} letras.")
+        # Predição ao vivo na janela: mostra o que o modelo atual acha do
+        # gesto ANTES de gravar — evidencia quais letras precisam de reforço.
+        classifier = KnnClassifier.load(session.dataset_path, k=config.knn_k)
 
     source = CameraSource(config.camera_index, config.frame_width,
                           config.frame_height)
@@ -161,10 +179,14 @@ def main(argv=None) -> int:
                 break
             rgb = preprocess(frame, config.process_width)
             detection = extractor.extract(rgb)
+            prediction = None
             if detection is not None:
+                if classifier is not None:
+                    prediction = classifier.predict_landmarks(
+                        detection.landmarks)
                 session.feed(detection.landmarks)
 
-            draw_overlay(cv2, frame, session, detection)
+            draw_overlay(cv2, frame, session, detection, prediction)
             cv2.imshow("Coleta LIBRAS", frame)
 
             key = cv2.waitKey(1) & 0xFF

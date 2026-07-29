@@ -61,4 +61,10 @@ uv run python3 -m libras.collect --camera 0 --burst 20
 In the video window: hold the gesture and press the matching letter key
 (A–Z) to record a burst of samples; `ESC` exits. Aim for at least ~20
 samples per letter, varying the hand angle and distance slightly. Samples
-are appended to `data/dataset.csv`.
+are appended to `data/dataset.csv`, and the model is reloaded at the end of
+each burst — the live prediction on screen shows which letters still need
+reinforcement.
+
+`data/dataset.csv` already ships with 9032 collected samples covering the 20
+static letters (A–G, I, L–W). `H`, `J`, `K`, `X`, `Y` and `Z` involve
+movement and are out of scope for this iteration.
