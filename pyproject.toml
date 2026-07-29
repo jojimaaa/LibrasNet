@@ -1,13 +1,32 @@
 [project]
 name = "librasnet"
 version = "0.1.0"
-description = "Add your description here"
+description = "Tradutor embarcado de LIBRAS (PCS3732 — Lab. de Processadores)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "numpy>=1.26",
     "pytest>=9.1.1",
     "ruff>=0.16.0",
 ]
+
+# Dependências de hardware/visão: NÃO entram no `uv sync` padrão, porque a
+# suíte de requisitos precisa rodar em máquina sem webcam (RNF-07). Instale
+# com `uv sync --extra hardware` no dispositivo alvo ou na máquina de
+# desenvolvimento com câmera.
+[project.optional-dependencies]
+hardware = [
+    "opencv-python>=4.8",
+    "mediapipe>=0.10.9; platform_machine != 'aarch64'",
+    # No ARM64 as wheels do mediapipe 1.x exigem a extensão criptográfica
+    # ARMv8 (AES), ausente no Cortex-A72 da Raspberry Pi 4.
+    "mediapipe>=0.10.9,<1.0; platform_machine == 'aarch64'",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+pythonpath = ["."]
 
 [tool.ruff]
 exclude = [
@@ -19,3 +38,6 @@ exclude = [
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["libras"]
