@@ -10,4 +10,4 @@ Esta versão contém os blocos B1 a B5; B6-B8 e o módulo transversal de
 monitoramento entram nas entregas seguintes.
 """
 
-__version__ = "0.2.0"
+__version__ = "1.1"

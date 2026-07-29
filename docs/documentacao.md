@@ -11,7 +11,7 @@ de Computação e Sistemas Digitais (PCS)
 | **Grupo**                 | Enzo Koichi Jojima (14568285) · Pedro Biagioni Matusita (14602115)   |
 | **Professores**           | Prof. Dr. Victor Takashi Hayashi · Prof. Dr. Carlos Eduardo Cugnasca |
 | **Plataforma-alvo**       | Raspberry Pi 4                                                       |
-| **Release desta entrega** | `v0.1.0` — documentação inicial (motivação, requisitos, arquitetura) |
+| **Release desta entrega** | `v1.0` — documentação inicial (motivação, requisitos, arquitetura) |
 
 ---
 
@@ -336,6 +336,8 @@ medida que forem publicadas._
 
 - **Ramo principal:** `main`.
 - **_Commits_:** convenção _Conventional Commits_ (`feat:`, `fix:`, `docs:`…).
-- **_Releases_:** versionamento semântico, uma _tag_ por entrega
-  (`v0.1.0` = entrega 1, `v0.2.0` = entrega 2, …), com nota de _release_
-  resumindo os artefatos e o PDF anexado.
+- **_Releases_:** uma _tag_ por entrega, no formato `v<maior>.<menor>`:
+  `v1.0` = entrega 1, `v1.1` = entrega 2, `v1.2` = entrega 3, e assim por
+  diante até `v1.5` (entrega 6). Cada _tag_ tem nota de _release_ resumindo
+  os artefatos e o PDF anexado. Uma correção publicada entre duas entregas
+  recebe uma terceira casa (`v1.1.1`).
