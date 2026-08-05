@@ -8,6 +8,7 @@ uma fonte sintética (``SyntheticSource``), que dispensa câmera e OpenCV
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from abc import ABC, abstractmethod
 
@@ -85,6 +86,72 @@ class CameraSource(FrameSource):
 
     def release(self):
         self._cap.release()
+
+
+class ThreadedFrameSource(FrameSource):
+    """Envolve uma fonte, lendo-a numa thread própria: entrega o quadro mais
+    recente e descarta os atrasados.
+
+    Sem isso, ``cap.read()`` bloqueia dentro do laço do pipeline esperando o
+    V4L2, e o tempo de captura soma ao de inferência. Pior: quando o pipeline
+    é mais lento que a câmera, a fila do driver acumula e o quadro processado
+    já está velho — a tradução responde a um gesto que passou. Drenando a
+    fonte numa thread, o pipeline sempre pega o quadro atual e a latência
+    volta a ser de um quadro.
+
+    ``dropped`` conta os quadros capturados que o pipeline nunca viu: é a
+    medida direta da distância entre a taxa da câmera e a do pipeline.
+    """
+
+    def __init__(self, source: FrameSource, stale_timeout_s: float = 2.0):
+        self.source = source
+        self.stale_timeout_s = stale_timeout_s
+        self.dropped = 0
+        self._lock = threading.Lock()
+        self._frame = None
+        self._seq = 0
+        self._delivered = 0
+        self._ended = False
+        self._new_frame = threading.Event()
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._loop, daemon=True,
+                                        name="captura")
+        self._thread.start()
+
+    def _loop(self) -> None:
+        while not self._stop.is_set():
+            frame = self.source.read()
+            with self._lock:
+                if frame is None:
+                    self._ended = True
+                    self._new_frame.set()
+                    return
+                if self._seq > self._delivered:
+                    # o quadro anterior não chegou a ser processado
+                    self.dropped += 1
+                self._frame = frame
+                self._seq += 1
+            self._new_frame.set()
+
+    def read(self):
+        while True:
+            with self._lock:
+                if self._seq > self._delivered:
+                    self._delivered = self._seq
+                    return self._frame
+                if self._ended:
+                    return None
+                self._new_frame.clear()
+            if not self._new_frame.wait(self.stale_timeout_s):
+                log.warning("nenhum quadro novo em %.1fs; repetindo o último",
+                            self.stale_timeout_s)
+                with self._lock:
+                    return self._frame
+
+    def release(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=self.stale_timeout_s + 1)
+        self.source.release()
 
 
 class SyntheticSource(FrameSource):

@@ -55,6 +55,7 @@ async function refreshMetrics() {
     const p = m.pipeline || {};
     $("m-fps").textContent = fmt(p.fps);
     $("m-frames").textContent = fmt(p.quadros_processados, "", 0);
+    $("m-dropped").textContent = fmt(p.quadros_descartados, "", 0);
 
     const list = $("latencias");
     list.innerHTML = "";

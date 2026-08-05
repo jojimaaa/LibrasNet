@@ -8,11 +8,17 @@ A webcam física é substituída pela fonte sintética (RNF-07); o
 pré-processamento exercitado é o de produção.
 """
 import importlib.util
+import time
 
 import numpy as np
 import pytest
 
-from libras.capture import CameraError, CameraSource, SyntheticSource
+from libras.capture import (
+    CameraError,
+    CameraSource,
+    SyntheticSource,
+    ThreadedFrameSource,
+)
 from libras.preprocess import bgr_to_rgb, preprocess, resize_width
 
 CV2_AVAILABLE = importlib.util.find_spec("cv2") is not None
@@ -83,6 +89,82 @@ def test_falha_transitoria_de_leitura_nao_encerra_a_fonte(monkeypatch):
     source._cap = FakeCap(failures_before_ok=limit)
     assert source.read() is None                 # desiste, sem travar
     assert source._cap.reads == limit
+
+
+# ----------------------------------------------- B1 captura em thread própria
+class CountingSource(SyntheticSource):
+    """Fonte que entrega um quadro a cada ``period_s``, numerado no pixel 0."""
+
+    def __init__(self, period_s=0.01, max_frames=None):
+        super().__init__(width=8, height=8, max_frames=max_frames)
+        self.period_s = period_s
+        self.produced = 0
+        self.released = False
+
+    def read(self):
+        frame = super().read()
+        if frame is None:
+            return None
+        time.sleep(self.period_s)
+        self.produced += 1
+        frame[0, 0, 0] = self.produced % 256
+        return frame
+
+    def release(self):
+        self.released = True
+
+
+def numero(frame):
+    return int(frame[0, 0, 0])
+
+
+def test_captura_em_thread_entrega_o_quadro_mais_recente():
+    """Consumidor lento não pode receber quadro velho: a fonte descarta os
+    atrasados em vez de enfileirá-los."""
+    source = ThreadedFrameSource(CountingSource(period_s=0.005))
+    try:
+        time.sleep(0.2)                     # a thread acumula produção
+        primeiro = numero(source.read())
+        assert primeiro >= 3, "a thread não drenou a fonte"
+        time.sleep(0.1)
+        segundo = numero(source.read())
+        assert segundo > primeiro
+        assert source.dropped > 0, "nenhum quadro atrasado foi descartado"
+    finally:
+        source.release()
+
+
+def test_captura_em_thread_nao_repete_quadro_para_consumidor_rapido():
+    """Consumidor mais rápido que a câmera espera o quadro novo, em vez de
+    reprocessar o mesmo — o MediaPipe é caro demais para isso."""
+    source = ThreadedFrameSource(CountingSource(period_s=0.02))
+    try:
+        numeros = [numero(source.read()) for _ in range(5)]
+        assert numeros == sorted(set(numeros)), f"quadros repetidos: {numeros}"
+    finally:
+        source.release()
+
+
+def test_captura_em_thread_encerra_quando_a_fonte_esgota():
+    source = ThreadedFrameSource(CountingSource(period_s=0.0, max_frames=4))
+    try:
+        lidos = 0
+        while source.read() is not None:
+            lidos += 1
+            if lidos > 10:
+                break
+        assert 1 <= lidos <= 4
+    finally:
+        source.release()
+
+
+def test_release_encerra_a_thread_e_a_fonte():
+    inner = CountingSource(period_s=0.01)
+    source = ThreadedFrameSource(inner)
+    source.read()
+    source.release()
+    assert not source._thread.is_alive()
+    assert inner.released
 
 
 # -------------------------------------------------------- B2 pré-processamento

@@ -12,6 +12,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import deque
+from dataclasses import replace
 
 from .classifier import KnnClassifier
 from .config import Config
@@ -20,6 +21,33 @@ from .preprocess import preprocess, resize_width
 from .temporal import LetterConfirmer, WordAssembler
 
 STAGES = ("captura", "preprocessamento", "landmarks", "classificacao")
+
+
+def measure_fps(source, extractor, classifier, config: Config,
+                frames: int = 25) -> float:
+    """Mede a taxa que o pipeline sustenta nesta máquina, sem pausa entre
+    quadros.
+
+    Serve de entrada para ``Config.tuned_for_fps``: a janela de votação de
+    B5 é dimensionada pela taxa medida, não pela desejada. Os quadros gastos
+    aqui também aquecem os caches do MediaPipe, cuja primeira inferência é
+    bem mais lenta que as seguintes.
+    """
+    warmup = TranslationPipeline(source, extractor, classifier,
+                                 replace(config, target_fps=0))
+    for _ in range(min(5, frames)):
+        if not warmup.step():
+            return 0.0
+    t0 = time.perf_counter()
+    processed = 0
+    for _ in range(frames):
+        if not warmup.step():
+            break
+        processed += 1
+    elapsed = time.perf_counter() - t0
+    if not processed or elapsed <= 0:
+        return 0.0
+    return processed / elapsed
 
 
 class PipelineState:
@@ -155,9 +183,13 @@ class TranslationPipeline:
 
     def stats(self) -> dict:
         """Métricas do pipeline; alimentam o painel de desempenho (RF-07)."""
-        return {"fps": round(self._fps(), 1),
-                "quadros_processados": self._frames,
-                "latencia_ms": self._latency_ms()}
+        stats = {"fps": round(self._fps(), 1),
+                 "quadros_processados": self._frames,
+                 "latencia_ms": self._latency_ms()}
+        dropped = getattr(self.source, "dropped", None)
+        if dropped is not None:
+            stats["quadros_descartados"] = dropped
+        return stats
 
     # -------------------------------------------------------- segundo plano
     def start(self) -> None:
