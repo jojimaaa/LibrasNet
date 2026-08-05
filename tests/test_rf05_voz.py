@@ -5,6 +5,7 @@ Critério de aceitação: cada palavra concluída é sintetizada em áudio, e a
 Os testes rodam sem placa de som: o motor nulo torna a fala observável
 (RNF-07).
 """
+import threading
 import time
 
 from libras.temporal import WordAssembler
@@ -72,6 +73,65 @@ def test_fallback_de_tts_sempre_disponivel(monkeypatch):
     assert isinstance(engine, NullEngine)
     engine.speak("TESTE")
     assert engine.spoken == ["TESTE"]
+
+
+def test_pyttsx3_cria_a_engine_na_thread_que_fala(monkeypatch):
+    """Regressão: o backend SAPI5 é COM e só toca na thread onde a engine foi
+    criada; uma engine reaproveitada volta muda. Cada fala deve construir a
+    sua, dentro da thread de voz."""
+    created = []
+
+    class FakeEngine:
+        def __init__(self):
+            created.append(threading.current_thread().name)
+
+        def say(self, text):
+            pass
+
+        def runAndWait(self):
+            pass
+
+        def stop(self):
+            pass
+
+    engine = Pyttsx3Engine.__new__(Pyttsx3Engine)  # sem tocar em pyttsx3
+    engine._factory = FakeEngine
+
+    speaker = AsyncSpeaker(engine)
+    speaker.speak("OI")
+    speaker.speak("USP")
+    speaker.close()
+
+    assert len(created) == 2, "engine reaproveitada entre falas"
+    assert set(created) == {"tts"}, f"engine criada fora da thread de voz: {created}"
+
+
+def test_close_espera_a_fila_ser_drenada():
+    """Uma palavra pendente não pode ser cortada no desligamento."""
+    class SlowEngine(NullEngine):
+        def speak(self, text):
+            time.sleep(0.4)
+            super().speak(text)
+
+    engine = SlowEngine()
+    speaker = AsyncSpeaker(engine)
+    for word in ("OI", "MUNDO", "USP"):
+        speaker.speak(word)
+    speaker.close()
+    assert engine.spoken == ["OI", "MUNDO", "USP"]
+
+
+def test_close_nao_espera_para_sempre_por_motor_travado():
+    """Motor travado atrasa o desligamento, mas não o impede (RNF-06)."""
+    class HangingEngine(NullEngine):
+        def speak(self, text):
+            time.sleep(30)
+
+    speaker = AsyncSpeaker(HangingEngine())
+    speaker.speak("OI")
+    t0 = time.perf_counter()
+    speaker.close(timeout=0.5)
+    assert time.perf_counter() - t0 < 5
 
 
 def test_falha_do_motor_nao_derruba_a_thread_de_voz():

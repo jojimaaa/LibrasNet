@@ -31,18 +31,33 @@ class TtsEngine(ABC):
 
 
 class Pyttsx3Engine(TtsEngine):
-    """pyttsx3: SAPI5 no Windows, espeak no Linux — multiplataforma."""
+    """pyttsx3: SAPI5 no Windows, espeak no Linux — multiplataforma.
+
+    Cada fala usa uma instância nova de ``Engine``, criada dentro da thread
+    que fala. Não é desperdício: no Windows o backend é COM (SAPI5), que só
+    funciona na thread onde o objeto foi criado, e uma engine reaproveitada
+    depois de ``runAndWait`` volta muda — nos dois casos o áudio é engolido em
+    silêncio, e só a duração da chamada denuncia (0,2 s em vez de ~1,5 s).
+    Construir a engine custa uma fração da própria síntese, e o custo cai na
+    thread de voz, nunca no laço de captura.
+
+    Usa ``pyttsx3.engine.Engine`` em vez de ``pyttsx3.init()`` porque a
+    fábrica devolve uma engine em cache por nome de driver — o que anularia a
+    criação por thread.
+    """
 
     name = "pyttsx3"
 
     def __init__(self):
-        import pyttsx3  # ImportError tratado na fábrica
+        from pyttsx3.engine import Engine  # ImportError tratado na fábrica
 
-        self._engine = pyttsx3.init()
+        self._factory = Engine
+        self._factory().stop()  # falha aqui = motor indisponível na máquina
 
     def speak(self, text):
-        self._engine.say(text)
-        self._engine.runAndWait()
+        engine = self._factory()
+        engine.say(text)
+        engine.runAndWait()
 
 
 class EspeakEngine(TtsEngine):
@@ -113,7 +128,14 @@ class AsyncSpeaker:
             except Exception:
                 log.exception("Falha ao sintetizar voz")
 
-    def close(self) -> None:
+    def close(self, timeout: float = 15.0) -> None:
+        """Drena a fila e encerra a thread de voz.
+
+        O limite é generoso porque a fila pode ter palavras pendentes e cada
+        uma leva ~1,5 s de síntese: um join curto encerraria o processo no
+        meio da última fala. Ainda assim é um limite, e não uma espera
+        infinita — um motor travado não pode impedir o desligamento.
+        """
         self._queue.put(None)
-        self._thread.join(timeout=2)
+        self._thread.join(timeout=timeout)
         self.engine.close()

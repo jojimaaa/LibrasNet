@@ -9,6 +9,11 @@ dependencies = [
     # aplicação (RF-01) também rode em máquina sem hardware (RNF-07).
     "flask>=3.0",
     "numpy>=1.26",
+    # Síntese de voz (RF-05). Fica no núcleo, e não no extra `hardware`: a
+    # saída em voz não depende de webcam, e é o modo demo que a exercita. No
+    # Windows usa SAPI5; no Linux/Raspberry Pi delega ao espeak-ng do sistema
+    # (`sudo apt install espeak-ng`), sem o qual degrada para texto (RNF-06).
+    "pyttsx3>=2.90",
     "pytest>=9.1.1",
     "ruff>=0.16.0",
 ]
