@@ -1,6 +1,6 @@
 [project]
 name = "librasnet"
-version = "1.2"
+version = "1.3"
 description = "Tradutor embarcado de LIBRAS (PCS3732 — Lab. de Processadores)"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -14,6 +14,8 @@ dependencies = [
     # Windows usa SAPI5; no Linux/Raspberry Pi delega ao espeak-ng do sistema
     # (`sudo apt install espeak-ng`), sem o qual degrada para texto (RNF-06).
     "pyttsx3>=2.90",
+    # Contadores de CPU/RAM/clock/temperatura do painel (RF-07).
+    "psutil>=5.9",
     "pytest>=9.1.1",
     "ruff>=0.16.0",
 ]

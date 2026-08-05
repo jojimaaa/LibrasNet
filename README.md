@@ -56,9 +56,30 @@ system keeps running with text-only output (RNF-06).
 The video stream needs OpenCV (the `hardware` extra); without it every other
 output still works and `/video_feed` answers `503`.
 
-Local HTTP API: `/api/state` (translation state), `/api/metrics` (pipeline
-metrics), `/api/info` (machine identification, filled in by the performance
-monitor in the next delivery). Nothing leaves the device (RNF-04, RNF-05).
+The performance panel (RF-07) shows CPU, RAM, clock, temperature, CPI/IPC,
+FPS and per-stage latency. Any metric with no source on the platform shows as
+`—` instead of breaking the page (RNF-06): CPI/IPC need `perf` (Linux only —
+`sudo apt install linux-perf` on Raspberry Pi OS), and temperature needs a
+readable thermal sensor.
+
+Local HTTP API: `/api/state` (translation state), `/api/metrics` (processor +
+pipeline metrics), `/api/info` (machine identification). Nothing leaves the
+device (RNF-04, RNF-05).
+
+### Benchmark (RNF-02, RNF-03)
+Standardized loads to compare the same project across hardware — integer ALU,
+vectorized float, memory bandwidth and the real translation pipeline, plus
+CPI/IPC under load and the clock/temperature before and after (which is what
+exposes thermal throttling on the Pi).
+
+```bash
+uv run python3 -m libras.benchmark --rapido            # ~5 s
+uv run python3 -m libras.benchmark --json pi.json      # full run, saved
+```
+
+Compare JSON files produced on different machines. The composite score is the
+geometric mean of the loads, with 1000 = the reference laptop; only compare
+runs from the same mode (`--rapido` with `--rapido`).
 
 ### Run the requirements test suite
 Each requirement of `docs/documentacao.md` maps to a test module; the suite
