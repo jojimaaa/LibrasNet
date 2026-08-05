@@ -81,6 +81,26 @@ Compare JSON files produced on different machines. The composite score is the
 geometric mean of the loads, with 1000 = the reference laptop; only compare
 runs from the same mode (`--rapido` with `--rapido`).
 
+### Running on the Raspberry Pi 4
+CPI/IPC and temperature only produce numbers on the Pi — on Windows they are
+reported as unavailable.
+
+```bash
+sudo apt install espeak-ng linux-perf python3-opencv
+# perf stat -a needs relaxed permissions (or sudo):
+sudo sysctl -w kernel.perf_event_paranoid=1
+
+uv sync --extra hardware
+uv run python3 -m libras.benchmark --json pi.json    # baseline, before the run
+uv run python3 -m libras.main                        # then open :8001 over the LAN
+```
+
+Note that `mediapipe` on ARM64 requires Python 3.9–3.12 (see the `hardware`
+extra in `pyproject.toml`). For the thermal analysis, take one benchmark right
+after boot and another after the translator has been running under load —
+`condicoes_iniciais` vs `condicoes_finais` in each JSON is where throttling
+shows up.
+
 ### Run the requirements test suite
 Each requirement of `docs/documentacao.md` maps to a test module; the suite
 runs without a camera, OpenCV or MediaPipe (RNF-07).
