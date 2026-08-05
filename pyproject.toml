@@ -1,10 +1,13 @@
 [project]
 name = "librasnet"
-version = "1.1"
+version = "1.2"
 description = "Tradutor embarcado de LIBRAS (PCS3732 — Lab. de Processadores)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    # Flask é puro Python: fica no núcleo para que a suíte do servidor de
+    # aplicação (RF-01) também rode em máquina sem hardware (RNF-07).
+    "flask>=3.0",
     "numpy>=1.26",
     "pytest>=9.1.1",
     "ruff>=0.16.0",

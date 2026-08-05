@@ -2,8 +2,8 @@
 
 Cada quadro atravessa os estágios B1 → B5: captura, pré-processamento,
 extração de landmarks, classificação e lógica temporal. O resultado fica em
-``PipelineState``, que nas entregas seguintes é o que o servidor de aplicação
-(B6) publica para o frontend. A latência de cada estágio é medida na
+``PipelineState``, que é o que o servidor de aplicação (B6) publica para o
+frontend (B7). A latência de cada estágio é medida na
 fronteira entre filtros — é assim que o gargalo fica localizado, e não apenas
 indicado (Seção 3.1, consequência 2).
 """
@@ -16,7 +16,7 @@ from collections import deque
 from .classifier import KnnClassifier
 from .config import Config
 from .features import normalize_landmarks
-from .preprocess import preprocess
+from .preprocess import preprocess, resize_width
 from .temporal import LetterConfirmer, WordAssembler
 
 STAGES = ("captura", "preprocessamento", "landmarks", "classificacao")
@@ -193,3 +193,40 @@ class TranslationPipeline:
             if self._latest_frame is None:
                 return None
             return self._latest_frame.copy()
+
+    @property
+    def supports_video(self) -> bool:
+        """A codificação JPEG do fluxo de vídeo (B6) exige OpenCV."""
+        try:
+            import cv2  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
+    def jpeg(self) -> "bytes | None":
+        """Último quadro em JPEG, anotado com a letra atual (fluxo MJPEG).
+
+        O quadro é reduzido a ``video_stream_width`` ANTES de anotar e
+        codificar: o JPEG é o único estágio que não serve à tradução, então
+        paga o mínimo. Reduzir também dispensa a cópia defensiva — o resize
+        já devolve um array novo, e é ele que recebe o texto.
+        """
+        try:
+            import cv2
+        except ImportError:
+            return None
+        with self._frame_lock:
+            frame = self._latest_frame
+            if frame is None:
+                return None
+            small = resize_width(frame, self.config.video_stream_width)
+            if small is frame:            # já estava na largura de destino
+                small = frame.copy()
+        letter = self.state.to_dict().get("letra_atual")
+        if letter:
+            cv2.putText(small, str(letter), (12, 40), cv2.FONT_HERSHEY_SIMPLEX,
+                        1.2, (0, 255, 128), 2, cv2.LINE_AA)
+        ok, buffer = cv2.imencode(
+            ".jpg", small,
+            [int(cv2.IMWRITE_JPEG_QUALITY), self.config.video_jpeg_quality])
+        return buffer.tobytes() if ok else None
