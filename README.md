@@ -36,8 +36,29 @@ uv sync --extra hardware
 
 ### Run project
 ```bash
-uv run python3 -m main
+# Demo mode: full pipeline on synthetic gestures, no camera required (RF-08)
+uv run python3 -m libras.main --demo
+
+# Real mode: webcam + MediaPipe + data/dataset.csv (needs the hardware extra)
+uv run python3 -m libras.main
 ```
+
+Then open <http://localhost:8001/>. The page shows the live camera stream
+(MJPEG), the current letter with its confidence, the word being assembled, the
+word history and the pipeline latency per stage. Each finished word is also
+spoken out loud (RF-05).
+
+Useful flags: `--port`, `--host`, `--camera`, `--demo-text`, `--no-tts` and
+`--tts-engine {pyttsx3,espeak,null}`. On Raspberry Pi OS, `espeak-ng` is the
+lightest engine (`sudo apt install espeak-ng`); with no engine at all the
+system keeps running with text-only output (RNF-06).
+
+The video stream needs OpenCV (the `hardware` extra); without it every other
+output still works and `/video_feed` answers `503`.
+
+Local HTTP API: `/api/state` (translation state), `/api/metrics` (pipeline
+metrics), `/api/info` (machine identification, filled in by the performance
+monitor in the next delivery). Nothing leaves the device (RNF-04, RNF-05).
 
 ### Run the requirements test suite
 Each requirement of `docs/documentacao.md` maps to a test module; the suite
