@@ -13,13 +13,13 @@ import logging
 import sys
 from pathlib import Path
 
-from .capture import CameraSource
+from .capture import CameraSource, ThreadedFrameSource
 from .classifier import KnnClassifier
 from .config import DEFAULT_DATASET, Config
 from .demo import make_demo_components
 from .landmarks import MediaPipeExtractor
 from .monitor import PerformanceMonitor, machine_info
-from .pipeline import PipelineState, TranslationPipeline
+from .pipeline import PipelineState, TranslationPipeline, measure_fps
 from .server import create_app
 from .tts import AsyncSpeaker, create_engine
 
@@ -40,6 +40,18 @@ def parse_args(argv=None):
                         help="endereço de escuta do servidor (padrão 0.0.0.0)")
     parser.add_argument("--port", type=int, default=None,
                         help=f"porta do servidor (padrão {Config.port})")
+    parser.add_argument("--process-width", type=int, default=None,
+                        help="largura do quadro na inferência (padrão: 224 "
+                             "em ARM, 320 em máquina de mesa)")
+    parser.add_argument("--fps", type=float, default=None,
+                        help="taxa usada para dimensionar a janela temporal; "
+                             "sem ela, é medida na partida")
+    parser.add_argument("--no-calibrate", action="store_true",
+                        help="não mede a taxa na partida; usa as janelas "
+                             "padrão (30 fps)")
+    parser.add_argument("--no-threaded-capture", action="store_true",
+                        help="lê a câmera dentro do laço, sem thread própria "
+                             "(mais lento; útil para comparar)")
     parser.add_argument("--no-tts", action="store_true",
                         help="desliga a síntese de voz")
     parser.add_argument("--tts-engine", choices=["pyttsx3", "espeak", "null"],
@@ -57,6 +69,10 @@ def main(argv=None) -> int:
         config.host = args.host
     if args.port is not None:
         config.port = args.port
+    if args.process_width is not None:
+        config.process_width = args.process_width
+    if args.no_threaded_capture:
+        config.threaded_capture = False
 
     # ------------------------------------------------ montagem dos estágios
     if args.demo:
@@ -74,11 +90,30 @@ def main(argv=None) -> int:
         classifier = KnnClassifier.load(dataset, k=config.knn_k)
         source = CameraSource(config.camera_index, config.frame_width,
                               config.frame_height)
+        if config.threaded_capture:
+            source = ThreadedFrameSource(source)
         extractor = MediaPipeExtractor(
             model_complexity=config.model_complexity)
         mode = (f"real (câmera {config.camera_index}, "
                 f"{classifier.n_samples} amostras, "
                 f"{len(classifier.classes)} letras)")
+
+    # ------------------------------------------- calibragem da janela de B5
+    if args.fps is not None:
+        measured = args.fps
+    elif args.no_calibrate:
+        measured = None
+    else:
+        measured = measure_fps(source, extractor, classifier, config)
+
+    if measured:
+        config = config.tuned_for_fps(measured)
+        tuning = (f"{measured:.1f} fps medidos → janela {config.window_size} "
+                  f"quadros, {config.min_votes} votos "
+                  f"({config.confirmation_latency_ms(measured):.0f} ms/letra)")
+    else:
+        tuning = (f"janela padrão ({config.window_size} quadros, "
+                  f"{config.min_votes} votos)")
 
     speaker = None
     if not args.no_tts:
@@ -116,6 +151,8 @@ def main(argv=None) -> int:
     print("=" * 62)
     print("Tradutor embarcado de LIBRAS")
     print(f"  modo:     {mode}")
+    print(f"  inferência: {config.process_width} px de largura")
+    print(f"  ritmo:    {tuning}")
     print(f"  TTS:      {tts_name}")
     print(f"  vídeo:    {video}")
     print(f"  frontend: http://localhost:{config.port}/")
