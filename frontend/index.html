@@ -35,11 +35,17 @@
       <ul id="historico"></ul>
     </section>
 
-    <!-- Painel do pipeline. As métricas do processador (CPU, RAM, clock,
-         temperatura, CPI/IPC) entram na entrega de instrumentação (RF-07). -->
+    <!-- Painel de desempenho (RF-07). Métrica sem fonte na plataforma
+         aparece como "—": nunca derruba a página (RNF-06). -->
     <section class="card" id="dashboard">
-      <h2>Desempenho do pipeline</h2>
+      <h2>Painel do processador</h2>
       <div class="tiles">
+        <div class="tile"><span class="tile-label">CPU</span><span class="tile-value" id="m-cpu">—</span></div>
+        <div class="tile"><span class="tile-label">RAM</span><span class="tile-value" id="m-ram">—</span></div>
+        <div class="tile"><span class="tile-label">Clock</span><span class="tile-value" id="m-clock">—</span></div>
+        <div class="tile"><span class="tile-label">Temperatura</span><span class="tile-value" id="m-temp">—</span></div>
+        <div class="tile"><span class="tile-label">CPI</span><span class="tile-value" id="m-cpi">—</span></div>
+        <div class="tile"><span class="tile-label">IPC</span><span class="tile-value" id="m-ipc">—</span></div>
         <div class="tile"><span class="tile-label">FPS</span><span class="tile-value" id="m-fps">—</span></div>
         <div class="tile"><span class="tile-label">Quadros</span><span class="tile-value" id="m-frames">—</span></div>
       </div>

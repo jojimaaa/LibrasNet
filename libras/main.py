@@ -5,9 +5,6 @@ Monta os blocos B1 → B8 e sobe o servidor de aplicação:
     python -m libras.main --demo                 # sem hardware (RF-08)
     python -m libras.main                        # webcam + MediaPipe + dataset
     python -m libras.main --demo --no-tts --port 8080
-
-O painel de métricas do processador (RF-07) entra na entrega de
-instrumentação; até lá ``/api/metrics`` publica só as métricas do pipeline.
 """
 from __future__ import annotations
 
@@ -21,6 +18,7 @@ from .classifier import KnnClassifier
 from .config import DEFAULT_DATASET, Config
 from .demo import make_demo_components
 from .landmarks import MediaPipeExtractor
+from .monitor import PerformanceMonitor, machine_info
 from .pipeline import PipelineState, TranslationPipeline
 from .server import create_app
 from .tts import AsyncSpeaker, create_engine
@@ -86,6 +84,9 @@ def main(argv=None) -> int:
     if not args.no_tts:
         speaker = AsyncSpeaker(create_engine(args.tts_engine))
 
+    monitor = PerformanceMonitor(config.monitor_interval, config.cpi_interval)
+    monitor.start()
+
     state = PipelineState()
 
     def on_word(word: str) -> None:
@@ -99,11 +100,14 @@ def main(argv=None) -> int:
     frame_provider = pipeline.jpeg if pipeline.supports_video else None
 
     def metrics() -> dict:
-        # O monitor do processador (RF-07) passa a preencher este dicionário
-        # na entrega de instrumentação; a chave "pipeline" não muda.
-        return {"pipeline": pipeline.stats()}
+        # O painel lê o retrato já amostrado pela thread do monitor, e não
+        # provoca uma coleta nova: a página atualiza a cada segundo e cada
+        # requisição custaria uma leitura de sensores (RF-07).
+        data = monitor.latest()
+        data["pipeline"] = pipeline.stats()
+        return data
 
-    app = create_app(state.to_dict, metrics, frame_provider=frame_provider,
+    app = create_app(state.to_dict, metrics, machine_info, frame_provider,
                      stream_fps=config.video_stream_fps)
 
     tts_name = speaker.engine.name if speaker else "desligado"
@@ -124,6 +128,7 @@ def main(argv=None) -> int:
         pass
     finally:
         pipeline.stop()
+        monitor.stop()
         if speaker:
             speaker.close()
         source.release()

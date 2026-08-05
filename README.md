@@ -56,9 +56,50 @@ system keeps running with text-only output (RNF-06).
 The video stream needs OpenCV (the `hardware` extra); without it every other
 output still works and `/video_feed` answers `503`.
 
-Local HTTP API: `/api/state` (translation state), `/api/metrics` (pipeline
-metrics), `/api/info` (machine identification, filled in by the performance
-monitor in the next delivery). Nothing leaves the device (RNF-04, RNF-05).
+The performance panel (RF-07) shows CPU, RAM, clock, temperature, CPI/IPC,
+FPS and per-stage latency. Any metric with no source on the platform shows as
+`—` instead of breaking the page (RNF-06): CPI/IPC need `perf` (Linux only —
+`sudo apt install linux-perf` on Raspberry Pi OS), and temperature needs a
+readable thermal sensor.
+
+Local HTTP API: `/api/state` (translation state), `/api/metrics` (processor +
+pipeline metrics), `/api/info` (machine identification). Nothing leaves the
+device (RNF-04, RNF-05).
+
+### Benchmark (RNF-02, RNF-03)
+Standardized loads to compare the same project across hardware — integer ALU,
+vectorized float, memory bandwidth and the real translation pipeline, plus
+CPI/IPC under load and the clock/temperature before and after (which is what
+exposes thermal throttling on the Pi).
+
+```bash
+uv run python3 -m libras.benchmark --rapido            # ~5 s
+uv run python3 -m libras.benchmark --json pi.json      # full run, saved
+```
+
+Compare JSON files produced on different machines. The composite score is the
+geometric mean of the loads, with 1000 = the reference laptop; only compare
+runs from the same mode (`--rapido` with `--rapido`).
+
+### Running on the Raspberry Pi 4
+CPI/IPC and temperature only produce numbers on the Pi — on Windows they are
+reported as unavailable.
+
+```bash
+sudo apt install espeak-ng linux-perf python3-opencv
+# perf stat -a needs relaxed permissions (or sudo):
+sudo sysctl -w kernel.perf_event_paranoid=1
+
+uv sync --extra hardware
+uv run python3 -m libras.benchmark --json pi.json    # baseline, before the run
+uv run python3 -m libras.main                        # then open :8001 over the LAN
+```
+
+Note that `mediapipe` on ARM64 requires Python 3.9–3.12 (see the `hardware`
+extra in `pyproject.toml`). For the thermal analysis, take one benchmark right
+after boot and another after the translator has been running under load —
+`condicoes_iniciais` vs `condicoes_finais` in each JSON is where throttling
+shows up.
 
 ### Run the requirements test suite
 Each requirement of `docs/documentacao.md` maps to a test module; the suite

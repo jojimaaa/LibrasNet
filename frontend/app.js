@@ -44,6 +44,14 @@ async function refreshState() {
 async function refreshMetrics() {
   try {
     const m = await getJson("/api/metrics");
+    // Métrica sem fonte na plataforma chega como null e vira "—" (RNF-06).
+    $("m-cpu").textContent = fmt(m.cpu_percent, " %");
+    $("m-ram").textContent = fmt(m.ram_percent, " %");
+    $("m-clock").textContent = fmt(m.clock_mhz, " MHz", 0);
+    $("m-temp").textContent = fmt(m.temperatura_c, " °C");
+    $("m-cpi").textContent = fmt(m.cpi, "", 2);
+    $("m-ipc").textContent = fmt(m.ipc, "", 2);
+
     const p = m.pipeline || {};
     $("m-fps").textContent = fmt(p.fps);
     $("m-frames").textContent = fmt(p.quadros_processados, "", 0);
