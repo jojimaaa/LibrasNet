@@ -439,3 +439,46 @@ Os testes garantem retrocompatibilidade e são agnósticos ao hardware, de forma
 ### 6.4 Dataset
 
 O anterior dataset foi extendido manualmente pelos integrantes do grupo garantindo a integração das 21 letras não estáticas do alfabeto de libras, bem como um número de amostras da ordem de 13k. Isso garante robustez ao KNN, capaz de diferenciar letras próximas como "T" e "F". É importante observar que a inferência ainda não é 100% correta uma vez que depende de angulação e de qual mão o usuário está utilizando (utilizamos a mão direita para a criação do dataset), porém também cabe ao usuário ajustar as posições adequadamente em frente a câmera a fim de gerar a letra desejada.
+
+### 6.5 Revisão por pares (_peer review_)
+
+A revisão cruzada entre grupos foi conduzida por _issues_ nos repositórios
+públicos, o que deixa o histórico auditável: cada crítica tem autor, data e o
+_commit_ ou _pull request_ que a responde.
+
+**Recebidas neste projeto.** As duas apontaram o mesmo sintoma — o atraso
+percebido na Raspberry Pi — por ângulos diferentes, e foram o ponto de partida
+da investigação da Seção 6.1.
+
+| _Issue_ | Título | Autor | Situação |
+| ------- | ------ | ----- | -------- |
+| [#3](https://github.com/jojimaaa/LibrasNet/issues/3) | Possibilidade de uso de dois núcleos | K4iwer | Fechada |
+| [#4](https://github.com/jojimaaa/LibrasNet/issues/4) | Quantidade de _frames_ por segundo | K4iwer | Fechada pelo [PR #5](https://github.com/jojimaaa/LibrasNet/pull/5) |
+
+A _issue_ #4 sugeriu reduzir a quantidade de quadros lidos/enviados, e foi
+exatamente o diagnóstico correto: a câmera entrega 30 quadros/s e o pipeline
+sustenta uma fração disso, de modo que o excedente ficava enfileirado no
+_driver_. O PR #5 implementou o descarte do quadro atrasado. Vale registrar a
+distinção que a resposta à _issue_ tornou explícita: a taxa de quadros não
+aumenta com isso — o que se elimina é latência.
+
+A _issue_ #3 propôs dedicar um núcleo à leitura da câmera e outro ao servidor
+web. Parte dela foi atendida pelo mesmo PR (a captura passou a ter _thread_
+própria), mas a fixação de _thread_ em núcleo (_affinity_) não foi
+implementada, por dois motivos: o que serializa o código Python é o GIL, e não
+a disponibilidade de núcleo — as etapas caras (captura, inferência,
+codificação JPEG) já o liberam; e reservar um núcleo para o servidor o tiraria
+da inferência, que é o gargalo. A medição da Seção 6.2 sustenta a decisão: com
+FPS em 3,5 e uso de CPU abaixo de 50% em quatro núcleos, o limite é o
+desempenho de _thread_ única, não a quantidade de núcleos disponíveis. A
+_issue_ segue aberta com essa justificativa registrada.
+
+**Emitidas para outros grupos.** Quatro _issues_, priorizando falhas de
+segurança e de robustez sobre preferências de estilo.
+
+| Projeto | _Issue_ | Apontamento |
+| ------- | ------- | ----------- |
+| Fechadura eletrônica (GroupS) | [#8](https://github.com/LuishCavada/GroupS_Project_PCS3732/issues/8) — Failsafe de falta de rosto | Com a fechadura trancada, não há como destravá-la sem o rosto de alguém já cadastrado. Sugerida uma via alternativa de desbloqueio, como uma sequência de botões. |
+| Fechadura eletrônica (GroupS) | [#9](https://github.com/LuishCavada/GroupS_Project_PCS3732/issues/9) — Falta de segurança física | Com um único servomotor exposto, a fechadura cede a quem forneça o _duty cycle_ do estado aberto. Sugerido reforçar o meio físico, levando placa e ESP para dentro do cofre. |
+| _Snake game_ (PCS3732-Projeto-Final) | [#5](https://github.com/CarolinaTavaresDuarte/PCS3732-Projeto-Final/issues/5) — Melhorias no modo difícil | O modo difícil é contornável pelo próprio controle: sugeridos obstáculos progressivos e um limite mínimo de velocidade no potenciômetro. |
+| _Snake game_ (PCS3732-Projeto-Final) | [#6](https://github.com/CarolinaTavaresDuarte/PCS3732-Projeto-Final/issues/6) — Colocar acentos | Palavras acentuadas na tela aparecem sem acento no _front_. |
