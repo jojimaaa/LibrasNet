@@ -313,8 +313,43 @@ produção tem ~13 mil. Como o custo do k-NN é linear no número de amostras, a
 carga subestima a classificação — e a subestima mais na Pi, onde a varredura
 de memória pesa mais. A comparação entre hardwares deve levar isso em conta.
 
-### 4.3 Otimizações de desempenho na plataforma-alvo
+---
 
+## 5. Plano de trabalho e entregas
+
+| Entrega                                       | Objetivo                                                                                                                   |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **1 — Documentação inicial** | Repositório público criado e organizado; motivação, requisitos e arquitetura refinados a partir dos relatórios anteriores. |
+| **2 — Migração do núcleo do pipeline** _(esta entrega)_ | Trazer os blocos B1–B5 e a suíte de testes de requisitos, com a suíte passando no repositório novo. |
+| **3 — Interface e saídas**  _(esta entrega)_ | Trazer B6, B7 e B8; tradução visível em tela e audível. |
+| **4 — Instrumentação e medição**  _(esta entrega)_  | Instrumentação, medição e painel de desempenho. |
+| **5 — Execução no alvo e avaliação** _(esta entrega)_ | Rodar na Raspberry Pi, levantar a comparação de desempenho e analisar CPI, clock e efeito térmico. |
+| **6 — Relatório final**                       | Consolidar resultados, limitações e conclusões, com vídeo de demonstração. |
+
+_O escopo de cada entrega posterior será ajustado às orientações do professor à
+medida que forem publicadas._
+
+### 5.1 Versionamento e _releases_
+
+- **Ramo principal:** `main`.
+- **_Commits_:** convenção _Conventional Commits_ (`feat:`, `fix:`, `docs:`…).
+- **_Releases_:** uma _tag_ por entrega, no formato `v<maior>.<menor>`:
+  `v1.0` = entrega 1, `v1.1` = entrega 2, `v1.2` = entrega 3, e assim por
+  diante até `v1.5` (entrega 6). Cada _tag_ tem nota de _release_ resumindo
+  os artefatos e o PDF anexado. Uma correção publicada entre duas entregas
+  recebe uma terceira casa (`v1.1.1`).
+
+
+---
+
+## 6. Release v1.2 (05 / 08 / 2026)
+
+Nessa release
+- Implementamos os blocos B1 - B8
+- Testes unitários por requisitos funcionais e não funcionais, quando aplicados. Resultados podem ser vistos pelo Github Actions ou utilizando os comandos encontrados no README
+- Trouxemos métricas de desempenho e algumas propostas de melhoria
+
+### 6.1 Melhorias de Desempenho Propostas
 A primeira execução na Raspberry Pi apresentou taxa de quadros baixa e atraso
 perceptível entre o gesto e a tradução. A investigação separou três causas
 independentes, e o registro delas interessa mais que o resultado: duas não
@@ -375,31 +410,32 @@ frontend consultava o estado a 4 Hz para um valor que muda a ~8 Hz (agora
 **Limitação.** A calibragem da janela temporal ocorre na partida. Se a taxa
 sustentada cair depois — por aquecimento e redução de clock — a janela
 permanece dimensionada para a taxa antiga e a latência por letra cresce
-silenciosamente. Recalibragem periódica é a correção; o efeito é justamente o
-que a análise térmica da Entrega 5 deve medir.
+silenciosamente. Recalibragem periódica é uma possível correção, a partir das métricas de temperatura que temos.
 
----
 
-## 5. Plano de trabalho e entregas
+### 6.2 Testes na Raspbery Pi 4
 
-| Entrega                                       | Objetivo                                                                                                                   |
-| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **1 — Documentação inicial** _(esta entrega)_ | Repositório público criado e organizado; motivação, requisitos e arquitetura refinados a partir dos relatórios anteriores. |
-| **2 — Migração do núcleo do pipeline**        | Trazer os blocos B1–B5 e a suíte de testes de requisitos, com a suíte passando no repositório novo. |
-| **3 — Interface e saídas**                    | Trazer B6, B7 e B8; tradução visível em tela e audível. |
-| **4 — Instrumentação e medição**              | Instrumentação, medição e painel de desempenho. |
-| **5 — Execução no alvo e avaliação**          | Rodar na Raspberry Pi, levantar a comparação de desempenho e analisar CPI, clock e efeito térmico. |
-| **6 — Relatório final**                       | Consolidar resultados, limitações e conclusões, com vídeo de demonstração. |
+![Figura 1: Interface gráfica (RF01 e RF07)](./screenshot-v1-2.png)
+Figura 1: Interface gráfica (RF01 e RF07)
 
-_O escopo de cada entrega posterior será ajustado às orientações do professor à
-medida que forem publicadas._
+<video width="100%" controls>
+  <source src="./videos/WhatsApp Video 2026-08-05 at 17.03.33.mp4" type="video/mp4">
+</video>
 
-### 5.1 Versionamento e _releases_
+Video 1: Video demonstração v1.2 [(link)](https://github.com/jojimaaa/LibrasNet/blob/main/docs/videos/WhatsApp%20Video%202026-08-05%20at%2017.03.33.mp4)
 
-- **Ramo principal:** `main`.
-- **_Commits_:** convenção _Conventional Commits_ (`feat:`, `fix:`, `docs:`…).
-- **_Releases_:** uma _tag_ por entrega, no formato `v<maior>.<menor>`:
-  `v1.0` = entrega 1, `v1.1` = entrega 2, `v1.2` = entrega 3, e assim por
-  diante até `v1.5` (entrega 6). Cada _tag_ tem nota de _release_ resumindo
-  os artefatos e o PDF anexado. Uma correção publicada entre duas entregas
-  recebe uma terceira casa (`v1.1.1`).
+
+Observamos:
+- FPS em 3.5, muito baixo mesmo com as melhorias propostas.
+- Uso de CPU e RAM em < 50% e temperatura em cerca de 50°C. Métricas indicam resultado positivo para os requisitos de portabilidade (RNF-04).
+
+### 6.3 Pipeline de testes modulares e independentes de hardware.
+
+![Figura 2: Suite de testes (RF01 e RF07)](./test-suite-v1-2.png)
+Figura 2: Suite de testes (RF01 e RF07)
+
+Os testes garantem retrocompatibilidade e são agnósticos ao hardware, de forma que podem ser rodados para testar o código do repositório em qualquer lugar (como por exemplo, os servidores do Github!). A suite de testes focou nos requisitos do projeto, além disso a sincronização dos pacotes do projeto foram separados de forma que atendem ao hardware presente (com a flag `--extra hardware`), instalando-se pacotes necessários para lidar com câmera (RNF-07).
+
+### 6.4 Dataset
+
+O anterior dataset foi extendido manualmente pelos integrantes do grupo garantindo a integração das 21 letras não estáticas do alfabeto de libras, bem como um número de amostras da ordem de 13k. Isso garante robustez ao KNN, capaz de diferenciar letras próximas como "T" e "F". É importante observar que a inferência ainda não é 100% correta uma vez que depende de angulação e de qual mão o usuário está utilizando (utilizamos a mão direita para a criação do dataset), porém também cabe ao usuário ajustar as posições adequadamente em frente a câmera a fim de gerar a letra desejada.
