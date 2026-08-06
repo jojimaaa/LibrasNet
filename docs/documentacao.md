@@ -287,6 +287,97 @@ produz dois benefícios diretos:
 Métrica sem fonte disponível na plataforma é reportada como indisponível — o
 sistema nunca falha por ausência de sensor (RNF-06).
 
+### 4.2 Benchmark comparável entre hardwares (RNF-02, RNF-03)
+
+O painel mede o sistema em operação; o benchmark (`python -m libras.benchmark`)
+mede o **processador** sob cargas padronizadas, para que a mesma aplicação
+possa ser comparada entre a máquina de desenvolvimento e a plataforma-alvo.
+
+| Carga               | O que isola                                    | Métrica |
+| ------------------- | ---------------------------------------------- | ------- |
+| `inteiro_python`    | ALU escalar de um núcleo (sensível a clock)    | MOPS    |
+| `flutuante_matmul`  | Ponto flutuante vetorizado (numpy/BLAS)        | GFLOPS  |
+| `memoria_copia`     | Largura de banda de memória                    | GB/s    |
+| `pipeline_traducao` | O pipeline real do projeto, em modo sintético  | FPS     |
+
+São quatro cargas, e não uma pontuação única, porque o interesse não é saber
+*quanto* a Pi é mais lenta, e sim **onde** ela é mais lenta. A pontuação
+composta é a média geométrica das razões contra a máquina de referência
+(1000 = referência), e serve apenas de resumo. CPI e IPC são medidos sob carga
+com `perf stat`; clock e temperatura são registrados antes e depois das
+cargas, o que evidencia _thermal throttling_.
+
+**Limitação conhecida.** A carga `pipeline_traducao` usa o dataset sintético
+(208 amostras) para ser reprodutível em qualquer máquina; o dataset de
+produção tem ~13 mil. Como o custo do k-NN é linear no número de amostras, a
+carga subestima a classificação — e a subestima mais na Pi, onde a varredura
+de memória pesa mais. A comparação entre hardwares deve levar isso em conta.
+
+### 4.3 Otimizações de desempenho na plataforma-alvo
+
+A primeira execução na Raspberry Pi apresentou taxa de quadros baixa e atraso
+perceptível entre o gesto e a tradução. A investigação separou três causas
+independentes, e o registro delas interessa mais que o resultado: duas não
+estavam no código.
+
+**1. Latência de fila na captura (B1).** A câmera entrega 30 quadros/s, e o
+pipeline sustenta cerca de 8: o excedente ficava na fila do driver V4L2, e o
+quadro que chegava à inferência já estava velho. O sistema traduzia um gesto
+do passado. A correção é a leitura da câmera em thread própria
+(`ThreadedFrameSource`), entregando sempre o quadro mais recente e
+descartando os atrasados. Medido com a fila do driver emulada e 80 ms de
+inferência por quadro:
+
+| Configuração          | FPS do pipeline | Atraso do quadro processado |
+| --------------------- | --------------- | --------------------------- |
+| Leitura no laço       | 12,3            | 26,4 quadros (~878 ms)      |
+| Leitura em thread     | 12,3            | 0,0 quadros                 |
+
+A taxa de quadros **não muda** — a inferência custa o mesmo. O que a
+otimização elimina é latência, e o painel passou a expor
+`quadros_descartados` como medida direta da distância entre a taxa da câmera
+e a do pipeline.
+
+**2. Janela temporal calibrada para a plataforma errada (B5).** Os parâmetros
+de votação foram dimensionados em quadros para 30 fps: `min_votes = 8` a 30
+fps são 267 ms, mas a 8 fps são **1000 ms** — acima da meta de 500 ms do
+RNF-02. O atraso vinha da configuração, não da lentidão do processador. As
+janelas passaram a ser declaradas em **segundos** (`vote_window_s`,
+`release_s`, `word_pause_s`) e convertidas para quadros pela taxa medida na
+partida (`measure_fps` → `Config.tuned_for_fps`):
+
+| Taxa sustentada | Janela      | Votos | Latência por letra |
+| --------------- | ----------- | ----- | ------------------ |
+| 30 fps          | 12 quadros  | 8     | 267 ms             |
+| 12 fps          | 5 quadros   | 3     | 250 ms             |
+| 8 fps           | 3 quadros   | 2     | 250 ms             |
+
+A 30 fps a conversão reproduz exatamente os valores anteriores, o que a suíte
+verifica. O contrapeso é explícito: menos votos por letra significa menos
+filtragem contra letra espúria, e a troca agora é ajustável em dois
+parâmetros (`vote_window_s`, `min_vote_ratio`) em vez de escondida em
+contagens de quadros.
+
+**3. Timestamp irreal no rastreador (B3).** O extrator informava ao MediaPipe
+incrementos fixos de 33 ms por quadro, isto é, afirmava rodar a 30 fps. O modo
+VIDEO usa esse intervalo no modelo de movimento do rastreador: a 8 fps reais,
+o rastreador esperava a mão quase parada, errava a previsão e recaía na
+detecção de palma completa — o caminho caro — na plataforma que menos pode
+pagá-lo. Passou a informar o tempo real decorrido, monotônico e estritamente
+crescente.
+
+**Custos periféricos eliminados.** O fluxo MJPEG reencodava o mesmo quadro
+quando o pipeline era mais lento que a taxa do fluxo (~20–30% dos encodes); a
+medição de CPI abria um processo `perf stat` a cada 5 s (agora 30 s); e o
+frontend consultava o estado a 4 Hz para um valor que muda a ~8 Hz (agora
+2 Hz).
+
+**Limitação.** A calibragem da janela temporal ocorre na partida. Se a taxa
+sustentada cair depois — por aquecimento e redução de clock — a janela
+permanece dimensionada para a taxa antiga e a latência por letra cresce
+silenciosamente. Recalibragem periódica é a correção; o efeito é justamente o
+que a análise térmica da Entrega 5 deve medir.
+
 ---
 
 ## 5. Plano de trabalho e entregas
